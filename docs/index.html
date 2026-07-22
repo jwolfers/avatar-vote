@@ -77,6 +77,23 @@
     text-align: center; color: var(--teal-light);
     min-height: 1.4em; font-size: 0.95rem; padding-bottom: 8px;
   }
+  /* ---- Comments ---- */
+  .comment-wrap { max-width: 640px; margin: 0 auto; padding: 10px 20px 30px; }
+  .comment-wrap h2 { color: var(--cream); font-size: 1.2rem; margin-bottom: 10px; text-align: center; }
+  .comment-wrap textarea {
+    width: 100%; min-height: 96px; resize: vertical;
+    border: none; border-radius: 12px; padding: 12px 14px;
+    font: inherit; font-size: 1rem; color: var(--ink);
+    background: var(--card);
+  }
+  .comment-wrap textarea:focus-visible { outline: 3px solid var(--teal-mid); }
+  .comment-actions { display: flex; align-items: center; gap: 14px; margin-top: 10px; justify-content: center; }
+  #comment-save {
+    background: var(--teal-mid); color: #fff; font-weight: 700; font-size: 0.98rem;
+    border: none; border-radius: 999px; padding: 10px 24px; cursor: pointer;
+  }
+  #comment-save:hover { filter: brightness(1.1); }
+  #comment-note { color: var(--teal-light); font-size: 0.92rem; min-height: 1.2em; }
   /* ---- Rankings ---- */
   .rankings-wrap {
     max-width: 760px; margin: 0 auto; padding: 10px 20px 70px; text-align: center;
@@ -109,6 +126,12 @@
   .rank-row .avg { color: var(--cream); font-weight: 800; font-size: 1.15rem; min-width: 3.2em; text-align: right; }
   .rank-row .avg small { display: block; font-weight: 400; font-size: 0.72rem; color: var(--teal-light); }
   .rank-row.first .bar { background: var(--gold); }
+  #rankings h3 { color: var(--cream); margin: 28px 0 12px; text-align: center; }
+  .comment-item {
+    background: rgba(255,255,255,0.06); border-radius: 12px;
+    padding: 12px 16px; margin-bottom: 10px;
+    color: var(--cream); white-space: pre-wrap; overflow-wrap: break-word;
+  }
 </style>
 </head>
 <body>
@@ -123,6 +146,15 @@
 <main class="grid" id="grid"></main>
 <div class="saved-note" id="saved-note"></div>
 
+<section class="comment-wrap">
+  <h2>Any comments?</h2>
+  <textarea id="comment-box" maxlength="2000" placeholder="Anything you want to say about these — what works, what doesn't, ideas…"></textarea>
+  <div class="comment-actions">
+    <button id="comment-save">Send comment</button>
+    <span id="comment-note"></span>
+  </div>
+</section>
+
 <section class="rankings-wrap">
   <hr>
   <button id="reveal-btn">Reveal current rankings</button>
@@ -131,6 +163,10 @@
     <h2>🏆 Current rankings</h2>
     <div class="meta" id="rankings-meta"></div>
     <div id="rankings-list"></div>
+    <div id="comments-out" style="display:none">
+      <h3>💬 Comments</h3>
+      <div id="comments-list"></div>
+    </div>
   </div>
 </section>
 
@@ -214,18 +250,37 @@ function setRating(num, value) {
   saveTimer = setTimeout(saveBallot, 400);
 }
 
-async function saveBallot() {
-  if (!remote) { note("Saved on this device ✓"); return; }
+const commentBox = document.getElementById("comment-box");
+commentBox.value = localStorage.getItem("comment") || "";
+document.getElementById("comment-save").addEventListener("click", () => {
+  localStorage.setItem("comment", commentBox.value);
+  commentNote("Sending…");
+  saveBallot(true);
+});
+
+async function saveBallot(fromComment) {
+  const say = fromComment ? commentNote : note;
+  if (!remote) { say("Saved on this device ✓"); return; }
+  const payload = { ratings, updatedAt: { ".sv": "timestamp" } };
+  const c = commentBox.value.trim();
+  if (c) payload.comment = c.slice(0, 2000);
   try {
     const res = await fetch(`${FIREBASE_DB_URL}/ballots/${voterId}.json`, {
       method: "PUT",
-      body: JSON.stringify({ ratings, updatedAt: { ".sv": "timestamp" } })
+      body: JSON.stringify(payload)
     });
     if (!res.ok) throw new Error(res.status);
-    note("Vote saved ✓");
+    say(fromComment ? "Comment sent ✓" : "Vote saved ✓");
   } catch (e) {
-    note("⚠️ Couldn't save — check your connection and click a star to retry.");
+    say("⚠️ Couldn't save — check your connection and try again.");
   }
+}
+
+function commentNote(msg) {
+  const el = document.getElementById("comment-note");
+  el.textContent = msg;
+  clearTimeout(commentNote.t);
+  if (msg.includes("✓")) commentNote.t = setTimeout(() => { el.textContent = ""; }, 3000);
 }
 
 function note(msg) {
@@ -293,6 +348,20 @@ document.getElementById("reveal-btn").addEventListener("click", async () => {
       <div class="avg">${avgTxt}<small>${r.count} vote${r.count === 1 ? "" : "s"}</small></div>`;
     list.appendChild(row);
   });
+
+  const comments = Object.values(ballots)
+    .map(b => b && typeof b.comment === "string" ? b.comment.trim() : "")
+    .filter(Boolean);
+  const cOut = document.getElementById("comments-out");
+  const cList = document.getElementById("comments-list");
+  cList.innerHTML = "";
+  comments.forEach(c => {
+    const d = document.createElement("div");
+    d.className = "comment-item";
+    d.textContent = c;
+    cList.appendChild(d);
+  });
+  cOut.style.display = comments.length ? "block" : "none";
 
   document.getElementById("rankings").style.display = "block";
   btn.textContent = "Refresh rankings";

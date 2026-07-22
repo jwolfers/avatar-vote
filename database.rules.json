@@ -6,12 +6,13 @@
       ".read": true,
       "$voterId": {
         ".write": true,
-        ".validate": "newData.hasChild('ratings')",
+        ".validate": "newData.hasChild('ratings') || newData.hasChild('comment')",
         "ratings": {
           "$face": {
             ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 10"
           }
         },
+        "comment": { ".validate": "newData.isString() && newData.val().length <= 2000" },
         "updatedAt": { ".validate": "newData.isNumber()" },
         "$other": { ".validate": false }
       }
