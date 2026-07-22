@@ -55,23 +55,22 @@
   .card .body { padding: 14px 16px 18px; }
   .card h2 { font-size: 1.05rem; color: var(--teal-dark); display: flex; justify-content: space-between; align-items: baseline; }
   .card h2 .score-label { font-size: 0.9rem; font-weight: 600; color: var(--teal-mid); min-height: 1.2em; }
-  .stars { display: flex; gap: 2px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
-  .stars button {
+  .stars { display: flex; margin-top: 10px; align-items: center; flex-wrap: nowrap; }
+  .stars button.star {
+    flex: 1 1 0; min-width: 0;
     background: none; border: none; cursor: pointer;
-    font-size: 1.45rem; line-height: 1;
-    color: #d8d3c6;
-    padding: 2px 1px;
-    transition: transform 0.08s ease, color 0.08s ease;
+    font-size: 1.3rem; line-height: 1;
+    padding: 2px 0; text-align: center;
+    transition: transform 0.08s ease;
   }
-  .stars button.zero {
-    font-size: 0.78rem; font-weight: 700;
-    color: #9a938a;
-    border: 1.5px solid #d8d3c6; border-radius: 999px;
-    padding: 3px 8px; margin-right: 6px;
+  .star .glyph { position: relative; display: inline-block; }
+  .star .base { color: #d8d3c6; }
+  .star .fill {
+    position: absolute; left: 0; top: 0;
+    width: 0; overflow: hidden;
+    color: var(--gold); pointer-events: none;
   }
-  .stars button.zero.on { color: #fff; background: var(--teal-mid); border-color: var(--teal-mid); }
-  .stars button.star.on { color: var(--gold); }
-  .stars button.star.preview { color: var(--gold); opacity: 0.55; }
+  .star .fill.preview { opacity: 0.55; }
   .stars button:hover { transform: scale(1.18); }
   .stars button:focus-visible { outline: 2px solid var(--teal-mid); outline-offset: 2px; border-radius: 4px; }
   .saved-note {
@@ -118,7 +117,7 @@
 
 <header>
   <h1>Help me pick my avatar!</h1>
-  <p>My designer came up with these concepts. Rate each one from 0 to 10 stars — just click. Your votes save automatically, and you can change them any time.</p>
+  <p>My designer came up with these concepts. Rate each one from 1 to 10 stars — just click (the left half of a star gives a half star). Your votes save automatically, and you can change them any time.</p>
 </header>
 
 <main class="grid" id="grid"></main>
@@ -172,21 +171,19 @@ FACES.forEach(num => {
   grid.appendChild(card);
 
   const wrap = card.querySelector(".stars");
-  const zero = document.createElement("button");
-  zero.className = "zero";
-  zero.textContent = "0";
-  zero.setAttribute("aria-label", `Rate concept ${num}: 0 stars`);
-  zero.addEventListener("click", () => setRating(num, 0));
-  wrap.appendChild(zero);
-
   for (let i = 1; i <= MAX; i++) {
     const b = document.createElement("button");
     b.className = "star";
-    b.textContent = "★";
     b.dataset.value = i;
-    b.setAttribute("aria-label", `Rate concept ${num}: ${i} star${i > 1 ? "s" : ""}`);
-    b.addEventListener("click", () => setRating(num, i));
-    b.addEventListener("mouseenter", () => paint(num, i, true));
+    b.innerHTML = '<span class="glyph"><span class="base">★</span><span class="fill">★</span></span>';
+    b.setAttribute("aria-label", `Rate concept ${num}: ${i} star${i > 1 ? "s" : ""} (left half for ${i - 0.5})`);
+    const pick = e => {
+      const r = b.getBoundingClientRect();
+      const isHalf = typeof e.clientX === "number" && e.clientX > 0 && (e.clientX - r.left) < r.width / 2;
+      return isHalf ? i - 0.5 : i;
+    };
+    b.addEventListener("click", e => setRating(num, pick(e)));
+    b.addEventListener("mousemove", e => paint(num, pick(e), true));
     b.addEventListener("mouseleave", () => paint(num, ratings[num], false));
     wrap.appendChild(b);
   }
@@ -196,11 +193,11 @@ FACES.forEach(num => {
 function paint(num, value, isPreview) {
   const wrap = document.getElementById("stars-" + num);
   const has = typeof value === "number";
-  wrap.querySelector(".zero").classList.toggle("on", !isPreview && value === 0);
   wrap.querySelectorAll(".star").forEach(b => {
     const v = +b.dataset.value;
-    b.classList.toggle("on", !isPreview && has && v <= value);
-    b.classList.toggle("preview", isPreview && v <= value);
+    const fill = b.querySelector(".fill");
+    fill.style.width = has && value >= v ? "100%" : has && value >= v - 0.5 ? "50%" : "0";
+    fill.classList.toggle("preview", isPreview);
   });
   const label = document.getElementById("label-" + num);
   if (isPreview) label.textContent = value + "/10";
